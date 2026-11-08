@@ -95,24 +95,24 @@ async function update(){
     const rows=[];
     for(const r of mw){
       const x=cm[String(r.insCode)];if(!x)continue;
-      const last=r.pDrCotVal||r.pClosing,vol=r.qTotTran5J;if(!last||!vol)continue;
+      const last=r.pdv||r.pcl||r.pDrCotVal||r.pClosing,vol=r.qtj||r.qTotTran5J;if(!last||!vol)continue;
       const bv=x.buy_I_Volume||0,sv=x.sell_I_Volume||0,bc=x.buy_CountI||0,sc=x.sell_CountI||0;
-      const bl=(r.blDs||[]).slice(0,5),dem=bl.reduce((s,b)=>s+(b.qTitMeDem||0),0),off=bl.reduce((s,b)=>s+(b.qTitMeOf||0),0);
-      const e=r.eps||{},pe=e.epsValue>0?last/e.epsValue:null;
-      rows.push({id:String(r.insCode),sym:r.lVal18AFC,name:r.lVal30,last,vol,val:(r.qTotCap||0)/1e10,
+      const bl=(r.blDs||[]).slice(0,5),dem=bl.reduce((s,b)=>s+(b.qmd||0),0),off=bl.reduce((s,b)=>s+(b.qmo||0),0);
+      const pe=r.pe>0?r.pe:(r.eps>0?last/r.eps:null);
+      rows.push({id:String(r.insCode),sym:r.lva||r.lVal18AFC,name:r.lvc||r.lVal30,last,vol,val:(r.qtc||r.qTotCap||0)/1e10,
         flow:(bv-sv)*last/1e10,
         power:bc&&sc?(sv?Math.min(10,(bv/bc)/(sv/sc)):(bv?10:null)):null,
         share:bv/vol*100,board:off?Math.min(10,dem/off):(dem?10:null),
-        queue:!!(bl[0]&&!bl[0].qTitMeOf&&bl[0].qTitMeDem>0),
-        chg:r.priceYesterday?(last/r.priceYesterday-1)*100:null,
-        pe,sector:e.sectorPE>0?e.sectorPE:null,fe:e.estimatedEPS>0?e.estimatedEPS:null,volx:null,persist:0});
+        queue:!!(bl[0]&&!bl[0].qmo&&bl[0].qmd>0),
+        chg:r.py?(last/r.py-1)*100:null,
+        pe,sector:null,fe:null,volx:null,persist:0});
     }
     LOG.push('نمادهای قابل تحلیل: '+rows.length);
     const top=rows.filter(r=>r.flow>0&&r.val>=cfg.minVal).sort((a,b)=>b.flow-a.flow).slice(0,60);
     let i=0,ok=0;
     await Promise.all(Array(6).fill(0).map(async()=>{while(i<top.length){const r=top[i++];st(`در حال گرفتن میانگین حجم ${fa(i,0)} از ${fa(top.length,0)}…`);
       try{const h=await J(API+'ClosingPrice/GetClosingPriceDailyList/'+r.id+'/30');
-        const a=(h.closingPriceDaily||[]).map(d=>d.qTotTran5J).filter(v=>v>0);
+        const hh=arr(h);if(!RAW.h&&hh[0])RAW.h=hh[0];const a=hh.map(d=>d.qTotTran5J||d.qtj||0).filter(v=>v>0);
         if(a.length>=5){r.volx=r.vol/(a.reduce((s,v)=>s+v,0)/a.length);ok++}}catch(e){}}}));
     LOG.push('میانگین حجم برای '+ok+' از '+top.length+' سهم گرفته شد');
     const day=new Date().toLocaleDateString('en-CA'),H=ls.get('rs_hist',{});
@@ -184,7 +184,7 @@ function renderFwd(){
   const c=compute().slice(0,15);
   $('#fwd').innerHTML=`<p class="mut">برای سهم‌های لیست کوتاه، سود پیش‌بینی‌شده هر سهم را از گزارش کدال وارد کن تا پی‌ای فوروارد حساب شود. اگر خالی بماند، عدد خودکار بازار استفاده می‌شود.</p>`+
   (c.map(r=>`<div class="card"><div class="head"><div class="sym">${r.sym}</div><div class="sc" style="font-size:15px">${fa(r.fpe)}<small>پی‌ای فوروارد</small></div></div>
-  <div class="row"><label for="e_${r.id}">قیمت ${fa(r.last,0)} — سود پیش‌بینی‌شده هر سهم</label><input id="e_${r.id}" data-id="${r.id}" type="number" step="any" inputmode="decimal" placeholder="${r.fe?fa(r.fe,0):'—'}" value="${FW[r.id]??''}"></div></div>`).join('')||'<div class="card mut">اول لیست کوتاه را بساز.</div>');
+  <div class="row"><label for="e_${r.id}">قیمت ${fa(r.last,0)} ریال — سود پیش‌بینی‌شده هر سهم (ریال)</label><input id="e_${r.id}" data-id="${r.id}" type="number" step="any" inputmode="decimal" placeholder="${r.fe?fa(r.fe,0):'—'}" value="${FW[r.id]??''}"></div></div>`).join('')||'<div class="card mut">اول لیست کوتاه را بساز.</div>');
   $('#fwd').querySelectorAll('input').forEach(i=>i.onchange=e=>{const v=num(e.target.value);if(v>0)FW[i.dataset.id]=v;else delete FW[i.dataset.id];ls.set('rs_fwd',FW);renderList();renderFwd()});
 }
 
