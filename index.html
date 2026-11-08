@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0A1513">
+<title>رادار سهام</title>
+<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0A1513;--bg2:#0F221E;--gold:#D4AF37;--gold2:#F5D77F;--em:#34d6a3;--red:#e5736b;--tx:#EAF2EE;--mut:#8fa79f;--line:rgba(212,175,55,.22)}
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(circle at 50% -10%,#16382f,var(--bg) 60%) fixed;color:var(--tx);font:15px/1.7 Vazirmatn,Tahoma,sans-serif;padding:12px 12px 48px;max-width:760px;margin-inline:auto}
+h1{margin:6px 0 0;font-size:22px;color:var(--gold2)}
+.sub{color:var(--mut);font-size:13px;margin:0 0 12px}
+button,input{font:inherit}
+.btn{width:100%;padding:12px;border:0;border-radius:14px;background:linear-gradient(135deg,var(--gold),var(--gold2));color:#1b1606;font-weight:700;cursor:pointer}
+.btn:disabled{opacity:.5}
+.btn:focus-visible,.tab:focus-visible,input:focus-visible{outline:2px solid var(--gold2);outline-offset:2px}
+#st{font-size:13px;color:var(--mut);margin:8px 2px 12px;min-height:22px}
+#st.err{color:var(--red)}
+.tabs{display:flex;gap:6px;margin-bottom:12px;overflow-x:auto}
+.tab{flex:1;white-space:nowrap;padding:9px 12px;border:1px solid var(--line);border-radius:12px;background:transparent;color:var(--mut);cursor:pointer}
+.tab.on{background:var(--bg2);color:var(--gold2);border-color:var(--gold)}
+.card{background:rgba(15,34,30,.8);border:1px solid var(--line);border-radius:18px;padding:14px;margin-bottom:12px;box-shadow:0 0 18px rgba(52,214,163,.06)}
+.head{display:flex;align-items:center;gap:10px}
+.rk{color:var(--mut);font-size:13px;min-width:22px}
+.sym{font-size:19px;font-weight:700;color:var(--gold2)}
+.nm{font-size:12px;color:var(--mut)}
+.sc{margin-inline-start:auto;text-align:center;border:1px solid var(--gold);border-radius:12px;padding:2px 10px;font-weight:700;color:var(--gold2);font-size:20px;line-height:1.3}
+.sc small{display:block;font-size:10px;color:var(--mut);font-weight:400}
+.bd{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+.b{font-size:12px;padding:1px 9px;border-radius:99px;border:1px solid var(--em);color:var(--em)}
+.b.w{border-color:var(--gold);color:var(--gold)}
+.g{display:grid;grid-template-columns:repeat(3,1fr);gap:8px 6px}
+.g div{background:rgba(255,255,255,.03);border-radius:10px;padding:5px 7px}
+.g span{display:block;font-size:11px;color:var(--mut)}
+.g b{font-size:15px}
+.pos{color:var(--em)}.neg{color:var(--red)}
+.row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:10px 0}
+.row label{flex:1}
+.row input[type=number]{width:96px;padding:7px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--tx);text-align:center}
+.row input[type=range]{width:46%;accent-color:var(--gold)}
+.pre{display:flex;gap:8px;margin-bottom:6px}
+.pre button{flex:1;padding:9px;border-radius:12px;border:1px solid var(--gold);background:transparent;color:var(--gold2);cursor:pointer}
+h3{margin:14px 0 4px;color:var(--gold2);font-size:16px}
+.mut{color:var(--mut);font-size:13px}
+pre{direction:ltr;text-align:left;white-space:pre-wrap;word-break:break-all;font-size:11px;background:var(--bg);padding:8px;border-radius:10px;max-height:220px;overflow:auto}
+.hide{display:none}
+</style>
+</head>
+<body>
+<h1>رادار سهام</h1>
+<p class="sub">پیدا کردن سهم‌های مستعد با جریان پول حقیقی، تابلو و پی‌ای فوروارد</p>
+<button class="btn" id="upd">به‌روزرسانی داده بازار</button>
+<div id="st"></div>
+<div class="tabs">
+<button class="tab on" data-t="list">لیست کوتاه</button>
+<button class="tab" data-t="flt">فیلترها</button>
+<button class="tab" data-t="fwd">پی‌ای فوروارد</button>
+<button class="tab" data-t="dbg">عیب‌یابی</button>
+</div>
+<section id="list"></section>
+<section id="flt" class="hide"></section>
+<section id="fwd" class="hide"></section>
+<section id="dbg" class="hide"></section>
+<p class="mut">این ابزار فقط لیست کوتاه برای بررسی بیشتر می‌سازد و توصیه خرید نیست.</p>
+
+<script>
+const $=s=>document.querySelector(s);
+const API='https://cdn.tsetmc.com/api/';
+const MW=API+'ClosingPrice/GetMarketWatch?market=0&'+[1,2,3,4,5,6,7,8,9].map((p,i)=>`paperTypes[${i}]=${p}`).join('&')+'&showTraded=true&withBestLimits=true&hEven=0&RefID=0';
+const CT=API+'ClientType/GetClientTypeAll';
+const ls={get:(k,d)=>{try{const v=JSON.parse(localStorage.getItem(k));return v==null?d:v}catch(e){return d}},set:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+const fa=(n,d=1)=>n==null||!isFinite(n)?'—':Number(n).toLocaleString('fa-IR',{maximumFractionDigits:d});
+const num=s=>+String(s).replace(/[۰-۹]/g,d=>'۰۱۲۳۴۵۶۷۸۹'.indexOf(d)).replace(/٫/g,'.');
+const PRE={'محافظه‌کار':{minVal:50,minFlow:10,minPower:1.5,minVolx:1.3,minShare:40},'متعادل':{minVal:20,minFlow:3,minPower:1.2,minVolx:1.5,minShare:35},'تهاجمی':{minVal:5,minFlow:1,minPower:1,minVolx:2.5,minShare:30}};
+const FLD=[['minVal','حداقل ارزش معاملات روز (میلیارد تومان)'],['minFlow','حداقل ورود پول حقیقی (میلیارد تومان)'],['minPower','حداقل قدرت خریدار حقیقی'],['minVolx','حداقل نسبت حجم به میانگین سی روز'],['minShare','حداقل سهم خرید حقیقی از کل حجم (درصد)'],['maxPE','حداکثر پی‌ای فعلی (صفر یعنی بدون محدودیت)']];
+const WL={flow:'وزن ورود پول',power:'وزن قدرت خریدار',volx:'وزن حجم مشکوک',share:'وزن سهم خرید حقیقی',board:'وزن تابلو',persist:'وزن تایید چندروزه'};
+let cfg=Object.assign({...PRE['متعادل'],maxPE:0,onlyFund:false,w:{flow:5,power:4,volx:3,share:3,board:3,persist:2}},ls.get('rs_cfg',{}));
+let D=ls.get('rs_data',null),FW=ls.get('rs_fwd',{}),LOG=[],RAW={};
+
+function st(t,e){const s=$('#st');s.textContent=t;s.className=e?'err':''}
+async function J(u){const c=new AbortController,t=setTimeout(()=>c.abort(),40000);try{const r=await fetch(u,{signal:c.signal});if(!r.ok)throw Error('HTTP '+r.status);return await r.json()}finally{clearTimeout(t)}}
+
+async function update(){
+  $('#upd').disabled=true;st('در حال دریافت قیمت‌ها و اطلاعات خریدار حقیقی و حقوقی…');
+  try{
+    const [m,c]=await Promise.all([J(MW),J(CT)]);
+    const mw=m.marketwatch||m.marketWatch||[],ct=c.clientType||c.clientTypes||[];
+    RAW={mw:mw[0],ct:ct[0]};LOG=['تعداد نماد بازار: '+mw.length,'تعداد ردیف حقیقی و حقوقی: '+ct.length];
+    if(!mw.length||!ct.length)throw Error('داده خالی برگشت');
+    const cm={};ct.forEach(x=>cm[String(x.insCode)]=x);
+    const rows=[];
+    for(const r of mw){
+      const x=cm[String(r.insCode)];if(!x)continue;
+      const last=r.pDrCotVal||r.pClosing,vol=r.qTotTran5J;if(!last||!vol)continue;
+      const bv=x.buy_I_Volume||0,sv=x.sell_I_Volume||0,bc=x.buy_CountI||0,sc=x.sell_CountI||0;
+      const bl=(r.blDs||[]).slice(0,5),dem=bl.reduce((s,b)=>s+(b.qTitMeDem||0),0),off=bl.reduce((s,b)=>s+(b.qTitMeOf||0),0);
+      const e=r.eps||{},pe=e.epsValue>0?last/e.epsValue:null;
+      rows.push({id:String(r.insCode),sym:r.lVal18AFC,name:r.lVal30,last,vol,val:(r.qTotCap||0)/1e10,
+        flow:(bv-sv)*last/1e10,
+        power:bc&&sc?(sv?Math.min(10,(bv/bc)/(sv/sc)):(bv?10:null)):null,
+        share:bv/vol*100,board:off?Math.min(10,dem/off):(dem?10:null),
+        queue:!!(bl[0]&&!bl[0].qTitMeOf&&bl[0].qTitMeDem>0),
+        chg:r.priceYesterday?(last/r.priceYesterday-1)*100:null,
+        pe,sector:e.sectorPE>0?e.sectorPE:null,fe:e.estimatedEPS>0?e.estimatedEPS:null,volx:null,persist:0});
+    }
+    LOG.push('نمادهای قابل تحلیل: '+rows.length);
+    const top=rows.filter(r=>r.flow>0&&r.val>=cfg.minVal).sort((a,b)=>b.flow-a.flow).slice(0,60);
+    let i=0,ok=0;
+    await Promise.all(Array(6).fill(0).map(async()=>{while(i<top.length){const r=top[i++];st(`در حال گرفتن میانگین حجم ${fa(i,0)} از ${fa(top.length,0)}…`);
+      try{const h=await J(API+'ClosingPrice/GetClosingPriceDailyList/'+r.id+'/30');
+        const a=(h.closingPriceDaily||[]).map(d=>d.qTotTran5J).filter(v=>v>0);
+        if(a.length>=5){r.volx=r.vol/(a.reduce((s,v)=>s+v,0)/a.length);ok++}}catch(e){}}}));
+    LOG.push('میانگین حجم برای '+ok+' از '+top.length+' سهم گرفته شد');
+    const day=new Date().toLocaleDateString('en-CA'),H=ls.get('rs_hist',{});
+    H[day]=rows.filter(r=>r.flow>0&&(r.power||0)>1).map(r=>r.id);
+    Object.keys(H).sort().slice(0,-8).forEach(k=>delete H[k]);ls.set('rs_hist',H);
+    const days=Object.keys(H).sort().slice(-5);
+    rows.forEach(r=>r.persist=days.filter(d=>H[d].includes(r.id)).length);
+    D={t:Date.now(),rows};ls.set('rs_data',D);
+    st('به‌روزرسانی انجام شد.');
+  }catch(e){
+    LOG.push('خطا: '+e.message);
+    st('دریافت داده انجام نشد. گوشی باید به اینترنت داخل ایران وصل باشد و فیلترشکن خاموش باشد. جزئیات در تب عیب‌یابی است.',1);
+  }
+  $('#upd').disabled=false;render();
+}
+
+const rank=(v,x)=>(v.filter(y=>y<x).length+v.filter(y=>y===x).length/2)/v.length;
+function pr(a,k,inv){const v=a.map(r=>r[k]).filter(x=>x!=null&&isFinite(x));
+  a.forEach(r=>{const x=r[k];r['p_'+k]=(x==null||!isFinite(x)||!v.length)?null:(inv?1-rank(v,x):rank(v,x))*100})}
+
+function compute(){
+  const rs=(D?D.rows:[]).map(r=>({...r}));
+  rs.forEach(r=>{const fe=FW[r.id]!=null?FW[r.id]:r.fe;r.fe2=fe;
+    r.fpe=fe>0&&r.last?r.last/fe:null;
+    r.prog=r.pe>0&&r.fpe>0?(r.pe-r.fpe)/r.pe*100:null;
+    r.vs=r.pe>0&&r.sector>0?r.pe/r.sector:null});
+  const c=rs.filter(r=>r.val>=cfg.minVal&&r.flow>=cfg.minFlow&&(r.power||0)>=cfg.minPower&&r.share>=cfg.minShare&&(r.volx==null||r.volx>=cfg.minVolx)&&(!cfg.maxPE||r.pe==null||r.pe<=cfg.maxPE)&&(!cfg.onlyFund||r.prog!=null));
+  ['flow','power','volx','share','board','persist','prog'].forEach(k=>pr(c,k));
+  ['pe','vs'].forEach(k=>pr(c,k,1));
+  c.forEach(r=>{let s=0,w=0;for(const k in cfg.w){if(r['p_'+k]!=null){s+=r['p_'+k]*cfg.w[k];w+=cfg.w[k]}}
+    r.s1=w?s/w:0;const f=[r.p_pe,r.p_vs,r.p_prog].filter(v=>v!=null);
+    r.s2=f.length?f.reduce((a,b)=>a+b)/f.length:null;r.sc=r.s2==null?r.s1:.6*r.s1+.4*r.s2});
+  return c.sort((a,b)=>b.sc-a.sc);
+}
+
+const cls=v=>v>0?'pos':v<0?'neg':'';
+function renderList(){
+  const c=compute().slice(0,40),t=D?new Date(D.t).toLocaleString('fa-IR'):null;
+  $('#list').innerHTML=(t?`<p class="mut">آخرین داده: ${t} — ${fa(c.length,0)} سهم از فیلترها رد شد</p>`:'')+
+  (c.map((r,i)=>`<div class="card"><div class="head"><span class="rk">${fa(i+1,0)}</span><div><div class="sym">${r.sym}</div><div class="nm">${r.name||''}</div></div>
+  <div class="sc">${fa(r.sc,0)}<small>امتیاز</small></div></div>
+  <div class="bd">${r.queue?'<span class="b">صف خرید</span>':''}${r.persist>=3?`<span class="b">ورود پول ${fa(r.persist,0)} روز از پنج روز</span>`:''}${r.volx>=3?'<span class="b w">حجم مشکوک</span>':''}${r.s2==null?'<span class="b w">بدون امتیاز بنیادی</span>':''}</div>
+  <div class="g">
+  <div><span>ورود پول حقیقی (میلیارد تومان)</span><b class="${cls(r.flow)}">${fa(r.flow)}</b></div>
+  <div><span>قدرت خریدار</span><b>${fa(r.power,2)}</b></div>
+  <div><span>حجم به میانگین</span><b>${fa(r.volx,1)} برابر</b></div>
+  <div><span>سهم خرید حقیقی</span><b>${fa(r.share,0)}٪</b></div>
+  <div><span>تقاضا به عرضه</span><b>${fa(r.board,1)}</b></div>
+  <div><span>درصد تغییر قیمت</span><b class="${cls(r.chg)}">${fa(r.chg,1)}٪</b></div>
+  <div><span>پی‌ای فعلی</span><b>${fa(r.pe)}</b></div>
+  <div><span>پی‌ای فوروارد</span><b>${fa(r.fpe)}</b></div>
+  <div><span>پیشرفت پی‌ای</span><b class="${cls(r.prog)}">${r.prog==null?'—':fa(r.prog,0)+'٪'}</b></div>
+  </div></div>`).join('')||'<div class="card mut">هنوز سهمی نمایش داده نمی‌شود. اول دکمه به‌روزرسانی را بزن، اگر خالی ماند فیلترها را شل‌تر کن.</div>');
+}
+
+function renderFlt(){
+  $('#flt').innerHTML=`<div class="pre">${Object.keys(PRE).map(k=>`<button data-p="${k}">${k}</button>`).join('')}</div>
+  <div class="card"><h3>فیلترهای مرحله اول</h3>${FLD.map(([k,l])=>`<div class="row"><label for="f_${k}">${l}</label><input id="f_${k}" type="number" step="any" inputmode="decimal" value="${cfg[k]}"></div>`).join('')}
+  <div class="row"><label for="f_of">فقط سهم‌هایی که پی‌ای فوروارد دارند</label><input id="f_of" type="checkbox" ${cfg.onlyFund?'checked':''}></div></div>
+  <div class="card"><h3>وزن عامل‌ها در امتیاز</h3>${Object.keys(WL).map(k=>`<div class="row"><label for="w_${k}">${WL[k]}: <b id="wv_${k}">${fa(cfg.w[k],0)}</b></label><input id="w_${k}" type="range" min="0" max="10" value="${cfg.w[k]}"></div>`).join('')}
+  <p class="mut">امتیاز نهایی: شصت درصد جریان پول و تابلو و چهل درصد بنیادی. برای سهم‌های بدون پی‌ای فوروارد فقط امتیاز مرحله اول حساب می‌شود.</p></div>`;
+  $('#flt').querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>{Object.assign(cfg,PRE[b.dataset.p]);ls.set('rs_cfg',cfg);renderFlt();renderList();renderFwd()});
+  FLD.forEach(([k])=>$('#f_'+k).onchange=e=>{cfg[k]=num(e.target.value)||0;ls.set('rs_cfg',cfg);renderList();renderFwd()});
+  $('#f_of').onchange=e=>{cfg.onlyFund=e.target.checked;ls.set('rs_cfg',cfg);renderList();renderFwd()};
+  Object.keys(WL).forEach(k=>$('#w_'+k).oninput=e=>{cfg.w[k]=+e.target.value;$('#wv_'+k).textContent=fa(cfg.w[k],0);ls.set('rs_cfg',cfg);renderList()});
+}
+
+function renderFwd(){
+  const c=compute().slice(0,15);
+  $('#fwd').innerHTML=`<p class="mut">برای سهم‌های لیست کوتاه، سود پیش‌بینی‌شده هر سهم را از گزارش کدال وارد کن تا پی‌ای فوروارد حساب شود. اگر خالی بماند، عدد خودکار بازار استفاده می‌شود.</p>`+
+  (c.map(r=>`<div class="card"><div class="head"><div class="sym">${r.sym}</div><div class="sc" style="font-size:15px">${fa(r.fpe)}<small>پی‌ای فوروارد</small></div></div>
+  <div class="row"><label for="e_${r.id}">قیمت ${fa(r.last,0)} — سود پیش‌بینی‌شده هر سهم</label><input id="e_${r.id}" data-id="${r.id}" type="number" step="any" inputmode="decimal" placeholder="${r.fe?fa(r.fe,0):'—'}" value="${FW[r.id]??''}"></div></div>`).join('')||'<div class="card mut">اول لیست کوتاه را بساز.</div>');
+  $('#fwd').querySelectorAll('input').forEach(i=>i.onchange=e=>{const v=num(e.target.value);if(v>0)FW[i.dataset.id]=v;else delete FW[i.dataset.id];ls.set('rs_fwd',FW);renderList();renderFwd()});
+}
+
+function renderDbg(){
+  $('#dbg').innerHTML=`<div class="card"><p class="mut">اگر عددها غیرعادی بودند، متن زیر را کپی کن و برای من بفرست.</p><pre>${LOG.join('\n')||'هنوز به‌روزرسانی انجام نشده'}\n\n${JSON.stringify(RAW,null,1).replace(/</g,'&lt;')}</pre></div>`;
+}
+
+function render(){renderList();renderFwd();renderDbg()}
+document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on',x===b));
+  ['list','flt','fwd','dbg'].forEach(k=>$('#'+k).classList.toggle('hide',k!==b.dataset.t))});
+$('#upd').onclick=update;
+renderFlt();render();
+</script>
+</body>
+</html>
