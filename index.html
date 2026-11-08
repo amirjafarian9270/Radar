@@ -68,7 +68,7 @@ pre{direction:ltr;text-align:left;white-space:pre-wrap;word-break:break-all;font
 <script>
 const $=s=>document.querySelector(s);
 const API='https://cdn.tsetmc.com/api/';
-const MW=API+'ClosingPrice/GetMarketWatch?market=0&'+[1,2,3,4,5,6,7,8,9].map((p,i)=>`paperTypes[${i}]=${p}`).join('&')+'&showTraded=true&withBestLimits=true&hEven=0&RefID=0';
+const MW=API+'ClosingPrice/GetMarketWatch?market=0&'+[1,2,3,4,5,6,7,8,9].map((p,i)=>`paperTypes[${i}]=${p}`).join('&')+'&showTraded=false&withBestLimits=true&hEven=0&RefID=0';
 const CT=API+'ClientType/GetClientTypeAll';
 const ls={get:(k,d)=>{try{const v=JSON.parse(localStorage.getItem(k));return v==null?d:v}catch(e){return d}},set:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
 const fa=(n,d=1)=>n==null||!isFinite(n)?'—':Number(n).toLocaleString('fa-IR',{maximumFractionDigits:d});
@@ -86,8 +86,10 @@ async function update(){
   $('#upd').disabled=true;st('در حال دریافت قیمت‌ها و اطلاعات خریدار حقیقی و حقوقی…');
   try{
     const [m,c]=await Promise.all([J(MW),J(CT)]);
-    const mw=m.marketwatch||m.marketWatch||[],ct=c.clientType||c.clientTypes||[];
-    RAW={mw:mw[0],ct:ct[0]};LOG=['تعداد نماد بازار: '+mw.length,'تعداد ردیف حقیقی و حقوقی: '+ct.length];
+    const arr=o=>Array.isArray(o)?o:(o&&Object.values(o).find(Array.isArray))||[];
+    const mw=arr(m),ct=arr(c),hd=o=>JSON.stringify(o).slice(0,300);
+    RAW={mw:mw[0]||hd(m),ct:ct[0]||hd(c)};
+    LOG=['کلیدهای پاسخ بازار: '+Object.keys(m||{}).slice(0,8).join(' , '),'کلیدهای پاسخ خریدار: '+Object.keys(c||{}).slice(0,8).join(' , '),'تعداد نماد بازار: '+mw.length,'تعداد ردیف خریدار: '+ct.length];
     if(!mw.length||!ct.length)throw Error('داده خالی برگشت');
     const cm={};ct.forEach(x=>cm[String(x.insCode)]=x);
     const rows=[];
@@ -122,7 +124,7 @@ async function update(){
     st('به‌روزرسانی انجام شد.');
   }catch(e){
     LOG.push('خطا: '+e.message);
-    st('دریافت داده انجام نشد. گوشی باید به اینترنت داخل ایران وصل باشد و فیلترشکن خاموش باشد. جزئیات در تب عیب‌یابی است.',1);
+    st(/خالی/.test(e.message)?'اتصال برقرار شد ولی داده خالی بود. متن تب عیب‌یابی را برای من بفرست.':'دریافت داده انجام نشد. گوشی باید به اینترنت داخل ایران وصل باشد و فیلترشکن خاموش باشد. جزئیات در تب عیب‌یابی است.',1);
   }
   $('#upd').disabled=false;render();
 }
