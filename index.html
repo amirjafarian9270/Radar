@@ -111,10 +111,28 @@ async function update(){
     }
     LOG.push('نمادهای قابل تحلیل: '+rows.length);
     const top=rows.filter(r=>r.val>=cfg.minVal).sort((a,b)=>b.flow-a.flow).slice(0,80);
-    let i=0,okP=0,okC=0,er='';
+    let i=0,okP=0,okC=0,er='',CHM=null;
     const hj=async(k,u)=>{try{return arr(await J(u))}catch(e){er=er||k+': '+e.message;return[]}};
+    const jr=async u=>{try{return await J(u)}catch(e){return{__e:e.message}}};
+    const shp=o=>o&&o.__e?o.__e:(arr(o).length?arr(o).length+' ردیف':'کلیدها: '+Object.keys(o||{}).join(' , '));
+    const CU=API+'ClientType/GetClientTypeHistory/',PU=API+'ClosingPrice/GetClosingPriceDailyList/';
+    const dd=ph=>ph.map(d=>d.dEven).filter(Boolean).sort((a,b)=>b-a);
+    const one=async(id,d)=>{const o=await jr(CU+id+'/'+d);let a=arr(o);if(!a.length&&o&&!o.__e){const v=Object.values(o).find(x=>x&&typeof x==='object');if(v)a=[v]}return a.map(x=>({dEven:d,...x}))};
+    const getCh=async(r,ph)=>{
+      if(CHM==='A')return arr(await jr(CU+r.id+'/20'));
+      if(CHM==='B')return arr(await jr(CU+r.id));
+      let out=[];for(const d of dd(ph).slice(0,5))out=out.concat(await one(r.id,d));return out};
+    if(top.length){
+      const p0=arr(await jr(PU+top[0].id+'/30')),d0=dd(p0)[0];
+      const rA=await jr(CU+top[0].id+'/20'),rB=await jr(CU+top[0].id),rC=d0?await jr(CU+top[0].id+'/'+d0):null;
+      LOG.push('آزمایش آدرس خریدار — الف: '+shp(rA),'ب: '+shp(rB),'پ: '+(rC?shp(rC):'—'));
+      CHM=arr(rA).length>1?'A':arr(rB).length>1?'B':(rC&&!rC.__e?'C':null);
+      LOG.push('روش انتخاب‌شده برای تاریخچه خریدار: '+(CHM||'هیچ'));
+      RAW.probe=arr(rA)[0]||arr(rB)[0]||rC||null;
+    }
     await Promise.all(Array(6).fill(0).map(async()=>{while(i<top.length){const r=top[i++];st(`در حال گرفتن تاریخچه ${fa(i,0)} از ${fa(top.length,0)}…`);
-      const [ph,ch]=await Promise.all([hj('قیمت',API+'ClosingPrice/GetClosingPriceDailyList/'+r.id+'/30'),hj('خریدار',API+'ClientType/GetClientTypeHistory/'+r.id+'/20')]);
+      const ph=await hj('قیمت',PU+r.id+'/30');
+      const ch=CHM&&(CHM!=='C'||i<=40)?await getCh(r,ph):[];
       if(!RAW.h&&ph[0])RAW.h=ph[0];if(!RAW.ch&&ch[0])RAW.ch=ch[0];
       multi(r,ph,ch);if(r.vh)okP++;if(r.src==='h')okC++}}));
     const day=new Date().toLocaleDateString('en-CA'),H=ls.get('rs_hist2',{});
@@ -151,7 +169,7 @@ function multi(r,ph,ch){
   if(days.length<3)return;
   r.src='h';
   const S=(n,k)=>days.slice(0,n).reduce((t,d)=>t+d[k],0);
-  r.flow5=S(5,'f');r.flow20=S(20,'f');
+  r.flow5=S(5,'f');r.flow20=days.length>5?S(20,'f'):null;
   const v5=S(5,'v'),v20=S(20,'v');r.f5n=v5?r.flow5/v5*100:null;
   const pw=n=>{const bv=S(n,'bv'),sv=S(n,'sv'),bc=S(n,'bc'),sc=S(n,'sc');return bc&&sc?(sv?Math.min(10,(bv/bc)/(sv/sc)):10):null};
   r.power5=pw(5);r.power20=pw(20);
@@ -167,7 +185,7 @@ function compute(){
     r.fpe=fe>0&&r.last?r.last/fe:null;
     r.prog=r.pe>0&&r.fpe>0?(r.pe-r.fpe)/r.pe*100:null;
     r.vs=r.pe>0&&r.sector>0?r.pe/r.sector:null});
-  const c=rs.filter(r=>r.flow5!=null&&r.val>=cfg.minVal&&r.flow5>=cfg.minFlow5&&(r.power5||0)>=cfg.minPower5&&r.flow>=cfg.minFlow&&(r.power||0)>=cfg.minPower&&r.share>=cfg.minShare&&(r.volx==null||r.volx>=cfg.minVolx)&&(!cfg.maxRise||r.rise5==null||r.rise5<=cfg.maxRise)&&(!cfg.maxPE||r.pe==null||r.pe<=cfg.maxPE)&&(!cfg.onlyFund||r.prog!=null)&&!(cfg.noOne&&r.oneDay));
+  const c=rs.filter(r=>r.val>=cfg.minVal&&(r.flow5!=null?(r.flow5>=cfg.minFlow5&&(r.power5||0)>=cfg.minPower5):(r.flow>=cfg.minFlow5&&(r.power||0)>=cfg.minPower5))&&r.flow>=cfg.minFlow&&(r.power||0)>=cfg.minPower&&r.share>=cfg.minShare&&(r.volx==null||r.volx>=cfg.minVolx)&&(!cfg.maxRise||r.rise5==null||r.rise5<=cfg.maxRise)&&(!cfg.maxPE||r.pe==null||r.pe<=cfg.maxPE)&&(!cfg.onlyFund||r.prog!=null)&&!(cfg.noOne&&r.oneDay));
   Object.keys(cfg.w).forEach(k=>pr(c,k));pr(c,'prog');
   ['pe','vs'].forEach(k=>pr(c,k,1));
   c.forEach(r=>{let s=0,w=0;for(const k in cfg.w){if(r['p_'+k]!=null){s+=r['p_'+k]*cfg.w[k];w+=cfg.w[k]}}
@@ -182,7 +200,7 @@ function renderList(){
   $('#list').innerHTML=(t?`<p class="mut">آخرین داده: ${t} — ${fa(c.length,0)} سهم از فیلترها رد شد</p>`:'')+
   (c.map((r,i)=>`<div class="card"><div class="head"><span class="rk">${fa(i+1,0)}</span><div><div class="sym">${r.sym}</div><div class="nm">${r.name||''}</div></div>
   <div class="sc">${fa(r.sc,0)}<small>امتیاز</small></div></div>
-  <div class="bd">${r.queue?'<span class="b">صف خرید</span>':''}${r.persist>=3?`<span class="b">ورود پول ${fa(r.persist,0)} روز از پنج روز</span>`:''}${r.volx>=3?'<span class="b w">حجم مشکوک</span>':''}${r.oneDay?'<span class="b w">ورود پول یک‌روزه</span>':''}${r.src==='l'?'<span class="b w">داده محلی</span>':''}${r.s2==null?'<span class="b w">بدون امتیاز بنیادی</span>':''}</div>
+  <div class="bd">${r.queue?'<span class="b">صف خرید</span>':''}${r.persist>=3?`<span class="b">ورود پول ${fa(r.persist,0)} روز از پنج روز</span>`:''}${r.volx>=3?'<span class="b w">حجم مشکوک</span>':''}${r.oneDay?'<span class="b w">ورود پول یک‌روزه</span>':''}${r.src==='l'?'<span class="b w">داده محلی</span>':''}${r.flow5==null?'<span class="b w">فقط داده امروز</span>':''}${r.s2==null?'<span class="b w">بدون امتیاز بنیادی</span>':''}</div>
   <div class="g">
   <div><span>ورود پول امروز (میلیارد تومان)</span><b class="${cls(r.flow)}">${fa(r.flow)}</b></div>
   <div><span>ورود پول پنج روز</span><b class="${cls(r.flow5)}">${fa(r.flow5)}</b></div>
