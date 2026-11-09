@@ -4,13 +4,18 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0A1513">
-<title>رادار سهام</title>
+<title>Assetro</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
 <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;700&display=swap" rel="stylesheet">
 <style>
 :root{--bg:#0A1513;--bg2:#0F221E;--gold:#D4AF37;--gold2:#F5D77F;--em:#34d6a3;--red:#e5736b;--tx:#EAF2EE;--mut:#8fa79f;--line:rgba(212,175,55,.22)}
 *{box-sizing:border-box}
 body{margin:0;background:radial-gradient(circle at 50% -10%,#16382f,var(--bg) 60%) fixed;color:var(--tx);font:15px/1.7 Vazirmatn,Tahoma,sans-serif;padding:12px 12px 48px;max-width:760px;margin-inline:auto}
-h1{margin:6px 0 0;font-size:22px;color:var(--gold2)}
+.hd{display:flex;align-items:center;gap:12px;margin:6px 0 4px}.hd img{width:52px;height:52px;border-radius:14px;box-shadow:0 0 14px rgba(212,175,55,.25)}
+h1{margin:0;font-size:24px;color:var(--gold2);letter-spacing:.5px}
 .sub{color:var(--mut);font-size:13px;margin:0 0 12px}
 button,input{font:inherit}
 .btn{width:100%;padding:12px;border:0;border-radius:14px;background:linear-gradient(135deg,var(--gold),var(--gold2));color:#1b1606;font-weight:700;cursor:pointer}
@@ -49,9 +54,10 @@ pre{direction:ltr;text-align:left;white-space:pre-wrap;word-break:break-all;font
 </style>
 </head>
 <body>
-<h1>رادار سهام</h1>
+<div class="hd"><img src="icon-192.png" alt=""><h1>Assetro</h1></div>
 <p class="sub">پیدا کردن سهم‌های مستعد با جریان پول حقیقی، تابلو و پی‌ای فوروارد</p>
 <button class="btn" id="upd">به‌روزرسانی داده بازار</button>
+<button class="btn" id="inst" hidden style="margin-top:8px">نصب برنامه روی گوشی</button>
 <div id="st"></div>
 <div class="tabs">
 <button class="tab on" data-t="list">لیست کوتاه</button>
@@ -256,6 +262,11 @@ document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{
   document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on',x===b));
   ['list','flt','fwd','bt','dbg'].forEach(k=>$('#'+k).classList.toggle('hide',k!==b.dataset.t))});
 $('#upd').onclick=update;
+let dp=null;
+window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();dp=e;$('#inst').hidden=false});
+$('#inst').onclick=async()=>{if(!dp)return;dp.prompt();await dp.userChoice;dp=null;$('#inst').hidden=true};
+window.addEventListener('appinstalled',()=>{$('#inst').hidden=true});
+if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
 renderFlt();render();
 </script>
 </body>
