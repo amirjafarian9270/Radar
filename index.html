@@ -57,11 +57,13 @@ pre{direction:ltr;text-align:left;white-space:pre-wrap;word-break:break-all;font
 <button class="tab on" data-t="list">لیست کوتاه</button>
 <button class="tab" data-t="flt">فیلترها</button>
 <button class="tab" data-t="fwd">پی‌ای فوروارد</button>
+<button class="tab" data-t="bt">نتیجه لیست‌ها</button>
 <button class="tab" data-t="dbg">عیب‌یابی</button>
 </div>
 <section id="list"></section>
 <section id="flt" class="hide"></section>
 <section id="fwd" class="hide"></section>
+<section id="bt" class="hide"></section>
 <section id="dbg" class="hide"></section>
 <p class="mut">این ابزار فقط لیست کوتاه برای بررسی بیشتر می‌سازد و توصیه خرید نیست.</p>
 
@@ -73,10 +75,10 @@ const CT=API+'ClientType/GetClientTypeAll';
 const ls={get:(k,d)=>{try{const v=JSON.parse(localStorage.getItem(k));return v==null?d:v}catch(e){return d}},set:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
 const fa=(n,d=1)=>n==null||!isFinite(n)?'—':Number(n).toLocaleString('fa-IR',{maximumFractionDigits:d});
 const num=s=>+String(s).replace(/[۰-۹]/g,d=>'۰۱۲۳۴۵۶۷۸۹'.indexOf(d)).replace(/٫/g,'.');
-const PRE={'محافظه‌کار':{minVal:50,minFlow:10,minPower:1.5,minVolx:1.3,minShare:40},'متعادل':{minVal:20,minFlow:3,minPower:1.2,minVolx:1.5,minShare:35},'تهاجمی':{minVal:5,minFlow:1,minPower:1,minVolx:2.5,minShare:30}};
-const FLD=[['minVal','حداقل ارزش معاملات روز (میلیارد تومان)'],['minFlow','حداقل ورود پول حقیقی (میلیارد تومان)'],['minPower','حداقل قدرت خریدار حقیقی'],['minVolx','حداقل نسبت حجم به میانگین سی روز'],['minShare','حداقل سهم خرید حقیقی از کل حجم (درصد)'],['maxPE','حداکثر پی‌ای فعلی (صفر یعنی بدون محدودیت)']];
-const WL={flow:'وزن ورود پول',power:'وزن قدرت خریدار',volx:'وزن حجم مشکوک',share:'وزن سهم خرید حقیقی',board:'وزن تابلو',persist:'وزن تایید چندروزه'};
-let cfg=Object.assign({...PRE['متعادل'],maxPE:0,onlyFund:false,w:{flow:5,power:4,volx:3,share:3,board:3,persist:2}},ls.get('rs_cfg',{}));
+const PRE={'محافظه‌کار':{minVal:50,minFlow5:15,minPower5:1.3,minFlow:0,minPower:0,minVolx:1.2,minShare:35,maxRise:8},'متعادل':{minVal:20,minFlow5:3,minPower5:1.1,minFlow:0,minPower:0,minVolx:1,minShare:30,maxRise:15},'تهاجمی':{minVal:5,minFlow5:1,minPower5:1,minFlow:-5,minPower:0,minVolx:1,minShare:25,maxRise:25}};
+const FLD=[['minVal','حداقل ارزش معاملات روز (میلیارد تومان)'],['minFlow5','حداقل ورود پول حقیقی پنج روزه (میلیارد تومان)'],['minPower5','حداقل قدرت خریدار پنج روزه'],['minFlow','حداقل ورود پول امروز (می‌تواند صفر یا منفی باشد)'],['minPower','حداقل قدرت خریدار امروز'],['minVolx','حداقل نسبت حجم امروز به میانگین سی روز'],['minShare','حداقل سهم خرید حقیقی امروز از کل حجم (درصد)'],['maxRise','حداکثر رشد قیمت پنج روز (درصد، صفر یعنی بدون محدودیت)'],['maxPE','حداکثر پی‌ای فعلی (صفر یعنی بدون محدودیت)']];
+const WL={flow:'وزن ورود پول امروز',flow5:'وزن ورود پول پنج روز',f5n:'وزن ورود پول پنج روز نسبت به ارزش معاملات',flow20:'وزن ورود پول بیست روز',power:'وزن قدرت خریدار امروز',power5:'وزن قدرت خریدار پنج روز',volx:'وزن حجم مشکوک',share:'وزن سهم خرید حقیقی',board:'وزن تابلو',persist:'وزن تایید چندروزه'};
+let cfg=Object.assign({...PRE['متعادل'],maxPE:0,onlyFund:false,noOne:true,w:{flow:2,flow5:4,f5n:3,flow20:2,power:2,power5:4,volx:3,share:2,board:3,persist:4}},ls.get('rs_cfg2',{}));
 let D=ls.get('rs_data',null),FW=ls.get('rs_fwd',{}),LOG=[],RAW={};
 
 function st(t,e){const s=$('#st');s.textContent=t;s.className=e?'err':''}
@@ -108,19 +110,25 @@ async function update(){
         pe,sector:null,fe:null,volx:null,persist:0});
     }
     LOG.push('نمادهای قابل تحلیل: '+rows.length);
-    const top=rows.filter(r=>r.flow>0&&r.val>=cfg.minVal).sort((a,b)=>b.flow-a.flow).slice(0,60);
-    let i=0,ok=0;
-    await Promise.all(Array(6).fill(0).map(async()=>{while(i<top.length){const r=top[i++];st(`در حال گرفتن میانگین حجم ${fa(i,0)} از ${fa(top.length,0)}…`);
-      try{const h=await J(API+'ClosingPrice/GetClosingPriceDailyList/'+r.id+'/30');
-        const hh=arr(h);if(!RAW.h&&hh[0])RAW.h=hh[0];const a=hh.map(d=>d.qTotTran5J||d.qtj||0).filter(v=>v>0);
-        if(a.length>=5){r.volx=r.vol/(a.reduce((s,v)=>s+v,0)/a.length);ok++}}catch(e){}}}));
-    LOG.push('میانگین حجم برای '+ok+' از '+top.length+' سهم گرفته شد');
-    const day=new Date().toLocaleDateString('en-CA'),H=ls.get('rs_hist',{});
-    H[day]=rows.filter(r=>r.flow>0&&(r.power||0)>1).map(r=>r.id);
-    Object.keys(H).sort().slice(0,-8).forEach(k=>delete H[k]);ls.set('rs_hist',H);
-    const days=Object.keys(H).sort().slice(-5);
-    rows.forEach(r=>r.persist=days.filter(d=>H[d].includes(r.id)).length);
+    const top=rows.filter(r=>r.val>=cfg.minVal).sort((a,b)=>b.flow-a.flow).slice(0,80);
+    let i=0,okP=0,okC=0,er='';
+    const hj=async(k,u)=>{try{return arr(await J(u))}catch(e){er=er||k+': '+e.message;return[]}};
+    await Promise.all(Array(6).fill(0).map(async()=>{while(i<top.length){const r=top[i++];st(`در حال گرفتن تاریخچه ${fa(i,0)} از ${fa(top.length,0)}…`);
+      const [ph,ch]=await Promise.all([hj('قیمت',API+'ClosingPrice/GetClosingPriceDailyList/'+r.id+'/30'),hj('خریدار',API+'ClientType/GetClientTypeHistory/'+r.id+'/20')]);
+      if(!RAW.h&&ph[0])RAW.h=ph[0];if(!RAW.ch&&ch[0])RAW.ch=ch[0];
+      multi(r,ph,ch);if(r.vh)okP++;if(r.src==='h')okC++}}));
+    const day=new Date().toLocaleDateString('en-CA'),H=ls.get('rs_hist2',{});
+    H[day]={};rows.slice().sort((a,b)=>b.flow-a.flow).slice(0,150).forEach(r=>H[day][r.id]=[+r.flow.toFixed(2),r.power]);
+    Object.keys(H).sort().slice(0,-8).forEach(k=>delete H[k]);ls.set('rs_hist2',H);
+    const ks=Object.keys(H).sort().slice(-5).reverse();
+    top.forEach(r=>{if(r.src)return;const a=ks.map(k=>H[k][r.id]).filter(Boolean);if(a.length<2)return;
+      r.src='l';r.flow5=a.reduce((t,x)=>t+x[0],0);r.persist=a.filter(x=>x[0]>0&&x[1]>1).length;
+      const p=a.map(x=>x[1]).filter(x=>x!=null);r.power5=p.length?p.reduce((t,x)=>t+x,0)/p.length:null;
+      const pos=a.map(x=>x[0]).filter(f=>f>0),ps=pos.reduce((t,f)=>t+f,0);r.oneDay=ps>0&&Math.max(...pos)/ps>.6});
+    LOG.push('تاریخچه قیمت: '+okP+' و تاریخچه خریدار: '+okC+' از '+top.length+' سهم'+(er?' — نخستین خطا: '+er:''));
     D={t:Date.now(),rows};ls.set('rs_data',D);
+    const bt=ls.get('rs_bt',{});bt[day]=compute().slice(0,10).map(r=>({id:r.id,s:r.sym,p:r.last}));
+    Object.keys(bt).sort().slice(0,-30).forEach(k=>delete bt[k]);ls.set('rs_bt',bt);
     st('به‌روزرسانی انجام شد.');
   }catch(e){
     LOG.push('خطا: '+e.message);
@@ -133,14 +141,34 @@ const rank=(v,x)=>(v.filter(y=>y<x).length+v.filter(y=>y===x).length/2)/v.length
 function pr(a,k,inv){const v=a.map(r=>r[k]).filter(x=>x!=null&&isFinite(x));
   a.forEach(r=>{const x=r[k];r['p_'+k]=(x==null||!isFinite(x)||!v.length)?null:(inv?1-rank(v,x):rank(v,x))*100})}
 
+function multi(r,ph,ch){
+  const dk=d=>d.dEven||d.recDate||0,srt=a=>a.slice().sort((x,y)=>dk(y)-dk(x));
+  const vol=d=>d.qTotTran5J||d.qtj||0,val=d=>d.qTotCap||d.qtc||0,pc=d=>d.pClosing||d.pDrCotVal||(vol(d)?val(d)/vol(d):0);
+  ph=srt(ph.filter(d=>vol(d)>0));ch=srt(ch);
+  const px={},vm={};ph.forEach(d=>{px[dk(d)]=vol(d)?val(d)/vol(d):0;vm[dk(d)]=val(d)/1e10});
+  if(ph.length>=6){const v=ph.slice(0,30).map(vol);r.volx=r.vol/(v.reduce((t,x)=>t+x,0)/v.length);r.rise5=ph[5]&&pc(ph[5])?(pc(ph[0])/pc(ph[5])-1)*100:null;r.vh=1}
+  const days=ch.slice(0,20).map(d=>{const bv=d.buy_I_Volume||0,sv=d.sell_I_Volume||0;return{f:(bv-sv)*(px[dk(d)]||r.last)/1e10,bv,sv,bc:d.buy_CountI||0,sc:d.sell_CountI||0,v:vm[dk(d)]||0}});
+  if(days.length<3)return;
+  r.src='h';
+  const S=(n,k)=>days.slice(0,n).reduce((t,d)=>t+d[k],0);
+  r.flow5=S(5,'f');r.flow20=S(20,'f');
+  const v5=S(5,'v'),v20=S(20,'v');r.f5n=v5?r.flow5/v5*100:null;
+  const pw=n=>{const bv=S(n,'bv'),sv=S(n,'sv'),bc=S(n,'bc'),sc=S(n,'sc');return bc&&sc?(sv?Math.min(10,(bv/bc)/(sv/sc)):10):null};
+  r.power5=pw(5);r.power20=pw(20);
+  const d5=days.slice(0,5);
+  r.persist=d5.filter(d=>d.f>0&&d.bc&&d.sc&&d.sv&&(d.bv/d.bc)/(d.sv/d.sc)>1).length;
+  const pos=d5.map(d=>d.f).filter(f=>f>0),ps=pos.reduce((t,f)=>t+f,0);
+  r.oneDay=ps>0&&Math.max(...pos)/ps>.6;
+}
+
 function compute(){
   const rs=(D?D.rows:[]).map(r=>({...r}));
   rs.forEach(r=>{const fe=FW[r.id]!=null?FW[r.id]:r.fe;r.fe2=fe;
     r.fpe=fe>0&&r.last?r.last/fe:null;
     r.prog=r.pe>0&&r.fpe>0?(r.pe-r.fpe)/r.pe*100:null;
     r.vs=r.pe>0&&r.sector>0?r.pe/r.sector:null});
-  const c=rs.filter(r=>r.val>=cfg.minVal&&r.flow>=cfg.minFlow&&(r.power||0)>=cfg.minPower&&r.share>=cfg.minShare&&(r.volx==null||r.volx>=cfg.minVolx)&&(!cfg.maxPE||r.pe==null||r.pe<=cfg.maxPE)&&(!cfg.onlyFund||r.prog!=null));
-  ['flow','power','volx','share','board','persist','prog'].forEach(k=>pr(c,k));
+  const c=rs.filter(r=>r.flow5!=null&&r.val>=cfg.minVal&&r.flow5>=cfg.minFlow5&&(r.power5||0)>=cfg.minPower5&&r.flow>=cfg.minFlow&&(r.power||0)>=cfg.minPower&&r.share>=cfg.minShare&&(r.volx==null||r.volx>=cfg.minVolx)&&(!cfg.maxRise||r.rise5==null||r.rise5<=cfg.maxRise)&&(!cfg.maxPE||r.pe==null||r.pe<=cfg.maxPE)&&(!cfg.onlyFund||r.prog!=null)&&!(cfg.noOne&&r.oneDay));
+  Object.keys(cfg.w).forEach(k=>pr(c,k));pr(c,'prog');
   ['pe','vs'].forEach(k=>pr(c,k,1));
   c.forEach(r=>{let s=0,w=0;for(const k in cfg.w){if(r['p_'+k]!=null){s+=r['p_'+k]*cfg.w[k];w+=cfg.w[k]}}
     r.s1=w?s/w:0;const f=[r.p_pe,r.p_vs,r.p_prog].filter(v=>v!=null);
@@ -154,11 +182,16 @@ function renderList(){
   $('#list').innerHTML=(t?`<p class="mut">آخرین داده: ${t} — ${fa(c.length,0)} سهم از فیلترها رد شد</p>`:'')+
   (c.map((r,i)=>`<div class="card"><div class="head"><span class="rk">${fa(i+1,0)}</span><div><div class="sym">${r.sym}</div><div class="nm">${r.name||''}</div></div>
   <div class="sc">${fa(r.sc,0)}<small>امتیاز</small></div></div>
-  <div class="bd">${r.queue?'<span class="b">صف خرید</span>':''}${r.persist>=3?`<span class="b">ورود پول ${fa(r.persist,0)} روز از پنج روز</span>`:''}${r.volx>=3?'<span class="b w">حجم مشکوک</span>':''}${r.s2==null?'<span class="b w">بدون امتیاز بنیادی</span>':''}</div>
+  <div class="bd">${r.queue?'<span class="b">صف خرید</span>':''}${r.persist>=3?`<span class="b">ورود پول ${fa(r.persist,0)} روز از پنج روز</span>`:''}${r.volx>=3?'<span class="b w">حجم مشکوک</span>':''}${r.oneDay?'<span class="b w">ورود پول یک‌روزه</span>':''}${r.src==='l'?'<span class="b w">داده محلی</span>':''}${r.s2==null?'<span class="b w">بدون امتیاز بنیادی</span>':''}</div>
   <div class="g">
-  <div><span>ورود پول حقیقی (میلیارد تومان)</span><b class="${cls(r.flow)}">${fa(r.flow)}</b></div>
-  <div><span>قدرت خریدار</span><b>${fa(r.power,2)}</b></div>
-  <div><span>حجم به میانگین</span><b>${fa(r.volx,1)} برابر</b></div>
+  <div><span>ورود پول امروز (میلیارد تومان)</span><b class="${cls(r.flow)}">${fa(r.flow)}</b></div>
+  <div><span>ورود پول پنج روز</span><b class="${cls(r.flow5)}">${fa(r.flow5)}</b></div>
+  <div><span>ورود پول بیست روز</span><b class="${cls(r.flow20)}">${fa(r.flow20)}</b></div>
+  <div><span>پنج روز نسبت به ارزش معاملات</span><b>${r.f5n==null?'—':fa(r.f5n,0)+'٪'}</b></div>
+  <div><span>قدرت خریدار امروز</span><b>${fa(r.power,2)}</b></div>
+  <div><span>قدرت خریدار پنج روز</span><b>${fa(r.power5,2)}</b></div>
+  <div><span>رشد قیمت پنج روز</span><b class="${cls(r.rise5)}">${r.rise5==null?'—':fa(r.rise5,0)+'٪'}</b></div>
+    <div><span>حجم به میانگین</span><b>${fa(r.volx,1)} برابر</b></div>
   <div><span>سهم خرید حقیقی</span><b>${fa(r.share,0)}٪</b></div>
   <div><span>تقاضا به عرضه</span><b>${fa(r.board,1)}</b></div>
   <div><span>درصد تغییر قیمت</span><b class="${cls(r.chg)}">${fa(r.chg,1)}٪</b></div>
@@ -171,13 +204,15 @@ function renderList(){
 function renderFlt(){
   $('#flt').innerHTML=`<div class="pre">${Object.keys(PRE).map(k=>`<button data-p="${k}">${k}</button>`).join('')}</div>
   <div class="card"><h3>فیلترهای مرحله اول</h3>${FLD.map(([k,l])=>`<div class="row"><label for="f_${k}">${l}</label><input id="f_${k}" type="number" step="any" inputmode="decimal" value="${cfg[k]}"></div>`).join('')}
+  <div class="row"><label for="f_no">حذف سهم‌هایی که ورود پولشان از یک روز می‌آید</label><input id="f_no" type="checkbox" ${cfg.noOne?'checked':''}></div>
   <div class="row"><label for="f_of">فقط سهم‌هایی که پی‌ای فوروارد دارند</label><input id="f_of" type="checkbox" ${cfg.onlyFund?'checked':''}></div></div>
   <div class="card"><h3>وزن عامل‌ها در امتیاز</h3>${Object.keys(WL).map(k=>`<div class="row"><label for="w_${k}">${WL[k]}: <b id="wv_${k}">${fa(cfg.w[k],0)}</b></label><input id="w_${k}" type="range" min="0" max="10" value="${cfg.w[k]}"></div>`).join('')}
   <p class="mut">امتیاز نهایی: شصت درصد جریان پول و تابلو و چهل درصد بنیادی. برای سهم‌های بدون پی‌ای فوروارد فقط امتیاز مرحله اول حساب می‌شود.</p></div>`;
-  $('#flt').querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>{Object.assign(cfg,PRE[b.dataset.p]);ls.set('rs_cfg',cfg);renderFlt();renderList();renderFwd()});
-  FLD.forEach(([k])=>$('#f_'+k).onchange=e=>{cfg[k]=num(e.target.value)||0;ls.set('rs_cfg',cfg);renderList();renderFwd()});
-  $('#f_of').onchange=e=>{cfg.onlyFund=e.target.checked;ls.set('rs_cfg',cfg);renderList();renderFwd()};
-  Object.keys(WL).forEach(k=>$('#w_'+k).oninput=e=>{cfg.w[k]=+e.target.value;$('#wv_'+k).textContent=fa(cfg.w[k],0);ls.set('rs_cfg',cfg);renderList()});
+  $('#flt').querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>{Object.assign(cfg,PRE[b.dataset.p]);ls.set('rs_cfg2',cfg);renderFlt();renderList();renderFwd()});
+  FLD.forEach(([k])=>$('#f_'+k).onchange=e=>{cfg[k]=num(e.target.value)||0;ls.set('rs_cfg2',cfg);renderList();renderFwd()});
+  $('#f_no').onchange=e=>{cfg.noOne=e.target.checked;ls.set('rs_cfg2',cfg);renderList();renderFwd()};
+  $('#f_of').onchange=e=>{cfg.onlyFund=e.target.checked;ls.set('rs_cfg2',cfg);renderList();renderFwd()};
+  Object.keys(WL).forEach(k=>$('#w_'+k).oninput=e=>{cfg.w[k]=+e.target.value;$('#wv_'+k).textContent=fa(cfg.w[k],0);ls.set('rs_cfg2',cfg);renderList()});
 }
 
 function renderFwd(){
@@ -192,10 +227,16 @@ function renderDbg(){
   $('#dbg').innerHTML=`<div class="card"><p class="mut">اگر عددها غیرعادی بودند، متن زیر را کپی کن و برای من بفرست.</p><pre>${LOG.join('\n')||'هنوز به‌روزرسانی انجام نشده'}\n\n${JSON.stringify(RAW,null,1).replace(/</g,'&lt;')}</pre></div>`;
 }
 
-function render(){renderList();renderFwd();renderDbg()}
+function renderBt(){
+  const bt=ls.get('rs_bt',{}),P={};(D?D.rows:[]).forEach(r=>P[r.id]=r.last);
+  $('#bt').innerHTML='<p class="mut">هر بار به‌روزرسانی، ده سهم برتر لیست و قیمتشان ذخیره می‌شود. اینجا می‌بینی بعدا چقدر تغییر کرده‌اند.</p>'+(Object.keys(bt).sort().reverse().map(k=>{
+    const L=bt[k].map(x=>({...x,c:P[x.id]?(P[x.id]/x.p-1)*100:null})),v=L.map(x=>x.c).filter(x=>x!=null),av=v.length?v.reduce((a,b)=>a+b)/v.length:null;
+    return `<div class="card"><div class="head"><div class="sym">${new Date(k).toLocaleDateString('fa-IR')}</div><div class="sc" style="font-size:15px"><span class="${cls(av)}">${av==null?'—':fa(av)+'٪'}</span><small>میانگین تا الان</small></div></div><p class="mut">${L.map(x=>x.s+' '+fa(x.c)+'٪').join(' ، ')}</p></div>`}).join('')||'<div class="card mut">هنوز لیستی ذخیره نشده.</div>');
+}
+function render(){renderList();renderFwd();renderBt();renderDbg()}
 document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{
   document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on',x===b));
-  ['list','flt','fwd','dbg'].forEach(k=>$('#'+k).classList.toggle('hide',k!==b.dataset.t))});
+  ['list','flt','fwd','bt','dbg'].forEach(k=>$('#'+k).classList.toggle('hide',k!==b.dataset.t))});
 $('#upd').onclick=update;
 renderFlt();render();
 </script>
